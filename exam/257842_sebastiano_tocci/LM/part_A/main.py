@@ -63,7 +63,7 @@ if __name__ == "__main__":
     # Increasing the back propagation steps can be seen as a regularization step
 
     # With SGD try with an higher learning rate (> 1 for instance)
-    lr = 1  # This is definitely not good for SGD
+    lr = 0.0001  # This is definitely not good for SGD
     clip = 5  # Clip the gradient
 
     vocab_len = len(lang.word2id)
@@ -79,7 +79,7 @@ if __name__ == "__main__":
         ignore_index=lang.word2id["<pad>"], reduction="sum"
     )
 
-    n_epochs = 50
+    n_epochs = 100
     patience = 3
     losses_train = []
     losses_dev = []

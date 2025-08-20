@@ -1,0 +1,4 @@
+emb_size=390
+hid_size=260
+vocab_len=10001
+pad_index=0

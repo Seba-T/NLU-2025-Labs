@@ -1,33 +1,65 @@
 \documentclass[a4paper]{article}
 
 \usepackage{INTERSPEECH2021}
+\usepackage{booktabs}
 
 % Put the lab number of the corresponding exercise
-\title{NLU course project}
-\name{Name Surname (mat. number)}
+	itle{NLU course project -- Language Modeling (Parts A and B)}
+\name{Sebastiano Tocci (258842)}
 
 \address{
   University of Trento}
-\email{name.surname@studenti.unitn.it}
+\email{sebastiano.tocci@studenti.unitn.it}
 
 \begin{document}
 
 \maketitle
 
 Dear students, \\
-here you can find a complete description of the sections that you need to write for the mini-report. You have to write a mini-report of \textbf{max 1 page (references, tables and images are excluded from the count)} for each last exercise of labs 4 (LM) and 5 (NLU). \textbf{Reports longer than 1 page will not be checked.} The purpose of this is to give you a way to report cleanly the results and give you space to describe what you have done and/or the originality that you have added to the exercise.
-\\
-\textbf{If you did part A only, you have to just report the results in a table with a small description.}
+\section{Introduction}
+We conducted a series of controlled experiments on a word-level language model. Part~A focuses on establishing strong baselines and optimizer/dropout choices, while Part~B explores stronger regularization (variational/locked dropout, stacking) and a non-monotonically triggered averaged SGD (NT-AvSGD). We report only outcomes explicitly recorded during runs. Best results improve progressively from a basic RNN baseline to LSTM with dropout and AdamW in Part~A, and further to variational dropout and NT-AvSGD in Part~B.
 
-\section{Introduction (approx. 100 words)}
-\begin{itemize}
-    \item \textit{a summary of what you have done}
-\end{itemize}
-\section{Implementation details (max approx. 200-300 words)}
-Do not explain the backbone deep neural network (e.g. RNN or BERT). Instead, focus on what you did on top of it. \textbf{Add references if you take inspiration from the code of others}
+\section{Implementation details}
+	extbf{Part A.} We started from a vanilla RNN baseline with SGD and a very small LR (Run~1), which yielded very high perplexity. Increasing the LR to 0.1 (Run~2) sharply reduced PPL. We then probed model size (emb/hidden): halving hurt (Run~3), moderate increases brought no gain over Run~2 (Runs~4--5). Switching to LSTM and increasing LR improved results (Runs~6--9). Adding dropout to LSTM helped further (Run~10). Moving to AdamW (Run~11) improved convergence speed; tuning LR to 5e-4 (Run~12) helped, and systematically increasing weight decay improved validation (Runs~17--20), with the best PPL at weight\_decay=0.15 (Run~20).
+
+	extbf{Part B.} We reused the best hyperparameters from Part~A. Increasing dropout to 0.3 and 0.4 improved PPL (Runs~2--3). Adding a second LSTM layer improved further (Run~4). Using a variational dropout scheme gave a small gain (Run~5). Finally, NT-AvSGD with LR=1, non-monotone window $n=5$, and logging interval $L=1$ (one validation per epoch in our loop) provided the largest improvement (Run~6). The training ran for 100 epochs without early stopping in that run. No other changes were introduced beyond those listed.
 
 \section{Results}
-Add tables and explain how you evaluated your model. Tables and images of plots or confusion matrices do not count in the page limit.
+Tables below list only the runs and metrics explicitly reported in the logs.
+
+\begin{table}[h]
+\centering
+\caption{Part A: selected runs and Test PPL.}
+\begin{tabular}{l l r}
+	oprule
+Run & Change & Test PPL \\
+\midrule
+1 & RNN, SGD LR=1e-4 & 5820.29 \\
+2 & RNN, SGD LR=0.1 & 166.53 \\
+10 & LSTM + dropout, SGD LR=0.5 & 127.18 \\
+11 & LSTM + dropout, AdamW LR=0.001 & 123.90 \\
+12 & AdamW LR=0.0005 & 121.64 \\
+17--20 & AdamW, increase weight\_decay & 119.68 $\rightarrow$ 103.30 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\centering
+\caption{Part B: runs and Test PPL.}
+\begin{tabular}{l l r}
+	oprule
+Run & Change & Test PPL \\
+\midrule
+1 & Baseline (best from A) & 108.76 \\
+2 & Dropout=0.3 (emb/out) & 101.23 \\
+3 & Dropout=0.4 (emb/out) & 100.58 \\
+4 & + 2 LSTM layers & 99.65 \\
+5 & + Variational/locked dropout & 98.87 \\
+6 & NT-AvSGD (LR=1, $n$=5, $L$=1) & 90.43 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 
 \bibliographystyle{IEEEtran}

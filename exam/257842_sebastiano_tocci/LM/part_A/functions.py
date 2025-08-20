@@ -3,6 +3,13 @@
 import math
 import torch
 import torch.nn as nn
+import os, re, glob
+import importlib
+
+from model import LM_RNN
+
+# Local device to avoid circular imports and star re-exports
+from main import DEVICE as _DEVICE
 
 
 # This class computes and stores our vocab
@@ -84,3 +91,108 @@ def init_weights(mat):
                 torch.nn.init.uniform_(m.weight, -0.01, 0.01)
                 if m.bias != None:
                     m.bias.data.fill_(0.01)
+
+
+# Helper functions to save/load models
+def get_last_run_number(model_dir='bin'):
+    os.makedirs(model_dir, exist_ok=True)
+    files = glob.glob(f'{model_dir}/training_run_*.pt')
+    runs = [
+        int(m.group(1))
+        for f in files
+        if (m := re.search(r'training_run_(\d+)\.pt$', os.path.basename(f)))
+    ]
+    return max(runs, default=0)
+
+
+
+# Load model function
+def load_model(model_index = 0, model_dir='bin'):
+    """Load the model at the given index. If a index is not provided it loads the model with the greatest index"""
+
+    highest_run_index = get_last_run_number(model_dir)
+    if highest_run_index == 0:
+        return None
+
+    index = model_index
+    if model_index == 0:
+        index = highest_run_index
+
+    model_path = f'{model_dir}/training_run_{index}.pt'
+    meta_path = f'{model_dir}/training_run_{index}.txt'
+
+    if not os.path.exists(meta_path):
+        print(f"The provided index {meta_path} does not correspond to an existing model. Please check the available models in ./bin and try again.")
+        return None
+
+    meta = {}
+    with open(meta_path, 'r') as f:
+        for line in f:
+            if '=' in line:
+                k, v = line.strip().split('=', 1)
+                try:
+                    meta[k] = int(v)
+                except ValueError:
+                    meta[k] = v  # keep non-int metadata (e.g., model_class)
+
+    emb_size = meta.get('emb_size')
+    hid_size = meta.get('hid_size')
+    vocab_len = meta.get('vocab_len')
+    pad_index = meta.get('pad_index', 0)
+    if None in (emb_size, hid_size, vocab_len):
+        raise RuntimeError('Invalid metadata: emb_size, hid_size, and vocab_len are required.')
+
+    class_name = meta.get('model_class', 'LM_RNN')
+    try:
+        ModelClass = getattr(importlib.import_module('model'), class_name)
+    except Exception:
+        ModelClass = LM_RNN  # fallback for backward compatibility
+
+    model = ModelClass(emb_size, hid_size, vocab_len, pad_index=pad_index).to(_DEVICE)
+    model.load_state_dict(torch.load(model_path, map_location=_DEVICE))
+    return model
+
+def save_model(model, emb_size, hid_size, pad_index, vocab_len, model_dir='bin'):
+    os.makedirs(model_dir, exist_ok=True)
+    run = get_last_run_number(model_dir) + 1
+    model_path = f'{model_dir}/training_run_{run}.pt'
+    meta_path = f'{model_dir}/training_run_{run}.txt'
+
+    print(f"Saving model {model.__class__.__name__} (emb_size={emb_size}, hid_size={hid_size}, vocab_len={vocab_len}) to {model_path} and metadata to {meta_path}...")
+
+    torch.save(model.state_dict(), model_path)
+    with open(meta_path, 'w') as f:
+        f.write(f'emb_size={emb_size}\n')
+        f.write(f'hid_size={hid_size}\n')
+        f.write(f'vocab_len={vocab_len}\n')
+        f.write(f'pad_index={pad_index}\n')
+        f.write(f'model_class={model.__class__.__name__}\n')
+
+
+def test_saved_model(index):
+    from utils import read_file, PennTreeBank, partial, collate_fn
+    from torch.utils.data import DataLoader
+
+    if not index:
+        print("Warning: a model index is required to run model evaluation. Exiting...")
+        return
+    model = load_model(model_index=index)
+
+    train_raw = read_file("dataset/PennTreeBank/ptb.train.txt")
+    test_raw = read_file("dataset/PennTreeBank/ptb.test.txt")
+    lang = Lang(train_raw, ["<pad>", "<eos>"])
+    # Wrtite the code to load the datasets and to run your functions
+
+    test_dataset = PennTreeBank(test_raw, lang)
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=128,
+        collate_fn=partial(collate_fn, pad_token=lang.word2id["<pad>"]),
+    )
+    criterion_eval = nn.CrossEntropyLoss(
+        ignore_index=lang.word2id["<pad>"], reduction="sum"
+    )
+    final_ppl, _ = eval_loop(test_loader, criterion_eval, model)
+    print("Test ppl: ", final_ppl)
+
+    exit(0)

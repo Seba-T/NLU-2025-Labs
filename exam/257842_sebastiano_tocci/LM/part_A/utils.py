@@ -6,10 +6,12 @@ import torch
 import torch.utils.data as data
 from functools import partial
 from pathlib import Path
-from torch.utils.data import DataLoader
 from urllib import request, parse
 
-DEVICE = "cuda:0"
+# Local device to avoid circular imports and star re-exports
+from main import DEVICE as _DEVICE
+
+
 
 
 def download_file(url, target_dir="./dataset/PennTreeBank"):
@@ -165,7 +167,7 @@ def collate_fn(data, pad_token):
     source, _ = merge(new_item["source"])
     target, lengths = merge(new_item["target"])
 
-    new_item["source"] = source.to(DEVICE)
-    new_item["target"] = target.to(DEVICE)
+    new_item["source"] = source.to(_DEVICE)
+    new_item["target"] = target.to(_DEVICE)
     new_item["number_tokens"] = sum(lengths)
     return new_item

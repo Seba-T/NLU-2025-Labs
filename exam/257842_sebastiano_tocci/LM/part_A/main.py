@@ -7,16 +7,20 @@ import torch.optim as optim
 import torch.nn as nn
 from torch.utils.data import DataLoader
 import numpy as np
+import torch
 
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Import everything from functions.py file
 from functions import *
 from utils import *
-from model import LM_RNN
+from model import LM_RNN, LM_LSTM, LM_LSTM_DROPOUT
+
 
 
 if __name__ == "__main__":
-    DEVICE = "cuda:0"
+
+    # test_saved_model(14)
 
     download_file(
         "https://raw.githubusercontent.com/BrownFortress/NLU-2024-Labs/main/labs/dataset/PennTreeBank/ptb.test.txt"
@@ -59,21 +63,20 @@ if __name__ == "__main__":
     hid_size = 200
     emb_size = 300
 
-    # Don't forget to experiment with a lower training batch size
-    # Increasing the back propagation steps can be seen as a regularization step
 
-    # With SGD try with an higher learning rate (> 1 for instance)
-    lr = 0.0001  # This is definitely not good for SGD
+    lr = 0.0005
+    weight_decay = 0.15
+    betas=(0.9, 0.999)
     clip = 5  # Clip the gradient
 
     vocab_len = len(lang.word2id)
 
-    model = LM_RNN(emb_size, hid_size, vocab_len, pad_index=lang.word2id["<pad>"]).to(
+    model = LM_LSTM_DROPOUT(emb_size, hid_size, vocab_len, pad_index=lang.word2id["<pad>"]).to(
         DEVICE
     )
     model.apply(init_weights)
 
-    optimizer = optim.SGD(model.parameters(), lr=lr)
+    optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay, betas=betas)
     criterion_train = nn.CrossEntropyLoss(ignore_index=lang.word2id["<pad>"])
     criterion_eval = nn.CrossEntropyLoss(
         ignore_index=lang.word2id["<pad>"], reduction="sum"
@@ -111,3 +114,5 @@ if __name__ == "__main__":
 
     final_ppl, _ = eval_loop(test_loader, criterion_eval, best_model)
     print("Test ppl: ", final_ppl)
+
+    save_model(best_model, emb_size, hid_size, lang.word2id["<pad>"], vocab_len)
